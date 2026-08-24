@@ -2,10 +2,12 @@ package com.example.sshtunnel;
 
 import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.KeyPair;
 import com.jcraft.jsch.Session;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -58,8 +60,21 @@ public class SshTunnelPlugin extends JavaPlugin {
     private void connectTunnel() {
         try {
             JSch jsch = new JSch();
+
+            // Pinggy doesn't check the key against any authorized list — it just
+            // wants a valid signed keypair to complete auth. Generate one fresh,
+            // in memory, each time we connect; nothing is written to disk.
+            KeyPair keyPair = KeyPair.genKeyPair(jsch, KeyPair.RSA, 2048);
+            ByteArrayOutputStream privateKeyOut = new ByteArrayOutputStream();
+            ByteArrayOutputStream publicKeyOut = new ByteArrayOutputStream();
+            keyPair.writePrivateKey(privateKeyOut);
+            keyPair.writePublicKey(publicKeyOut, "");
+            jsch.addIdentity("in-memory-key", privateKeyOut.toByteArray(), publicKeyOut.toByteArray(), null);
+            keyPair.dispose();
+
             session = jsch.getSession(SSH_USER, SSH_HOST, SSH_PORT);
             session.setConfig("StrictHostKeyChecking", "no");
+            session.setConfig("PreferredAuthentications", "publickey");
             session.setServerAliveInterval(15000);
             session.connect(15000);
 
