@@ -1,0 +1,6 @@
+name: SshTunnelPlugin
+version: 1.0.0
+main: com.example.sshtunnel.SshTunnelPlugin
+api-version: '1.20'
+author: you
+description: Opens an SSH reverse tunnel (e.g. to Pinggy or Serveo) in pure Java, no external ssh binary required.
