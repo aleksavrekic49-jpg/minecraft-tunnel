@@ -27,9 +27,9 @@ public class SshTunnelPlugin extends JavaPlugin {
     //   SSH_HOST = "serveo.net", SSH_PORT = 22, SSH_USER = "serveo"
     private static final String SSH_HOST = "free.pinggy.io";
     private static final int SSH_PORT = 443;
-    private static final String SSH_USER = "tunnel"; // pinggy ignores the username value itself
+    private static final String SSH_USER = "LBdKSIzHRna"; // Pinggy access token used as SSH username
 
-    private static final String LOCAL_HOST = "localhost";
+    private static final String LOCAL_HOST = "127.0.0.1";
     private static final int LOCAL_PORT = 25566; // <-- your Minecraft server port
 
     private Session session;
@@ -96,7 +96,7 @@ public class SshTunnelPlugin extends JavaPlugin {
                         new InputStreamReader(in, StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        getLogger().info("[tunnel] " + line);
+                        getLogger().info("[PINGGY] " + line);
                     }
                 } catch (Exception ignored) {
                     // stream closes when the session drops; watchdog handles reconnect
