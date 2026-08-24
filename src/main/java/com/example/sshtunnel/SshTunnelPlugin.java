@@ -23,7 +23,7 @@ public class SshTunnelPlugin extends JavaPlugin {
 
     private static final String SSH_HOST = "free.pinggy.io";
     private static final int SSH_PORT = 443;
-    private static final String SSH_USER = "LBdKSIzHRna"; // Pinggy access token as SSH username
+    private static final String SSH_USER = "LBdKSIzHRna+tcp"; // Pinggy access token as SSH username
 
     private static final String LOCAL_HOST = "127.0.0.1";
     private static final int LOCAL_PORT = 25566; // your Minecraft server port
