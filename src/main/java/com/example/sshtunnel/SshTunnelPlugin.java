@@ -65,8 +65,10 @@ public class SshTunnelPlugin extends JavaPlugin {
 
             // Request a remote forward with rport=0 -> server picks the public port.
             // -R 0:localhost:LOCAL_PORT
-            int assigned = session.setPortForwardingR("", 0, LOCAL_HOST, LOCAL_PORT);
-            getLogger().info("Remote forward established, server-assigned port: " + assigned);
+            // This JSch version returns void, so we don't get the assigned port
+            // back directly — it's only announced via the banner text below.
+            session.setPortForwardingR("", 0, LOCAL_HOST, LOCAL_PORT);
+            getLogger().info("Remote forward requested, waiting for server to announce public address...");
 
             // Pinggy/Serveo print the actual public host:port as banner text over
             // a normal shell channel — open one and log whatever comes back.
