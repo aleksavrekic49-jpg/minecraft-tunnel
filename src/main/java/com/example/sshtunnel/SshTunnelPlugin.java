@@ -1,6 +1,6 @@
 package com.example.sshtunnel;
 
-import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.ChannelShell;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.KeyPair;
 import com.jcraft.jsch.Session;
@@ -10,27 +10,23 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
  * Opens an SSH reverse tunnel entirely in pure Java (JSch), equivalent to:
- *   ssh -p 443 -R0:localhost:LOCAL_PORT free.pinggy.io
- * No external ssh binary, no shell access, no ngrok. Runs inside the same
- * JVM as the Paper server, so it works under restricted Pterodactyl
- * containers that only allow plugin jars.
- *
- * CONFIGURE THESE THREE CONSTANTS FOR YOUR SETUP:
+ *   ssh -p 443 -R0:127.0.0.1:25566 LBdKSIzHRna@free.pinggy.io
+ * No external ssh binary, no shell access needed on the host, no ngrok.
+ * Runs inside the same JVM as the Paper server.
  */
 public class SshTunnelPlugin extends JavaPlugin {
 
-    // --- Pinggy (default). To use Serveo instead, set:
-    //   SSH_HOST = "serveo.net", SSH_PORT = 22, SSH_USER = "serveo"
     private static final String SSH_HOST = "free.pinggy.io";
     private static final int SSH_PORT = 443;
-    private static final String SSH_USER = "LBdKSIzHRna"; // Pinggy access token used as SSH username
+    private static final String SSH_USER = "LBdKSIzHRna"; // Pinggy access token as SSH username
 
     private static final String LOCAL_HOST = "127.0.0.1";
-    private static final int LOCAL_PORT = 25566; // <-- your Minecraft server port
+    private static final int LOCAL_PORT = 25566; // your Minecraft server port
 
     private Session session;
     private volatile boolean shuttingDown = false;
@@ -40,7 +36,6 @@ public class SshTunnelPlugin extends JavaPlugin {
         getLogger().info("Starting SSH reverse tunnel to " + SSH_HOST + ":" + SSH_PORT + " ...");
         connectTunnel();
 
-        // Watchdog: check every 30s, reconnect if the session died
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (!shuttingDown && (session == null || !session.isConnected())) {
                 getLogger().warning("SSH tunnel disconnected, reconnecting...");
@@ -61,9 +56,9 @@ public class SshTunnelPlugin extends JavaPlugin {
         try {
             JSch jsch = new JSch();
 
-            // Pinggy doesn't check the key against any authorized list — it just
-            // wants a valid signed keypair to complete auth. Generate one fresh,
-            // in memory, each time we connect; nothing is written to disk.
+            // Fresh in-memory keypair for the SSH handshake itself. Pinggy's actual
+            // identity/authorization comes from SSH_USER (the access token), not
+            // from this key being pre-registered anywhere.
             KeyPair keyPair = KeyPair.genKeyPair(jsch, KeyPair.RSA, 2048);
             ByteArrayOutputStream privateKeyOut = new ByteArrayOutputStream();
             ByteArrayOutputStream publicKeyOut = new ByteArrayOutputStream();
@@ -74,22 +69,28 @@ public class SshTunnelPlugin extends JavaPlugin {
 
             session = jsch.getSession(SSH_USER, SSH_HOST, SSH_PORT);
             session.setConfig("StrictHostKeyChecking", "no");
-            session.setConfig("PreferredAuthentications", "publickey");
+            session.setConfig("PreferredAuthentications", "publickey,password,keyboard-interactive");
             session.setServerAliveInterval(15000);
             session.connect(15000);
+            getLogger().info("SSH session established, requesting remote forward...");
 
-            // Request a remote forward with rport=0 -> server picks the public port.
-            // -R 0:localhost:LOCAL_PORT
-            // This JSch version returns void, so we don't get the assigned port
-            // back directly — it's only announced via the banner text below.
+            // -R 0:127.0.0.1:LOCAL_PORT — server picks the public port.
+            // This JSch build's setPortForwardingR returns void, so the assigned
+            // port/URL only comes back via the banner text captured below.
             session.setPortForwardingR("", 0, LOCAL_HOST, LOCAL_PORT);
-            getLogger().info("Remote forward requested, waiting for server to announce public address...");
+            getLogger().info("Remote forward requested, opening shell channel for banner output...");
 
-            // Pinggy/Serveo print the actual public host:port as banner text over
-            // a normal shell channel — open one and log whatever comes back.
-            Channel shell = session.openChannel("shell");
+            // Pinggy only prints its welcome banner (with the tcp:// URL) to an
+            // interactive session — that requires a pty, not just a bare channel.
+            ChannelShell shell = (ChannelShell) session.openChannel("shell");
+            shell.setPty(true);
             shell.connect(10000);
+
             InputStream in = shell.getInputStream();
+            OutputStream out = shell.getOutputStream();
+            // Some servers wait for a newline before flushing their banner.
+            out.write('\n');
+            out.flush();
 
             new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(
@@ -104,7 +105,10 @@ public class SshTunnelPlugin extends JavaPlugin {
             }, "ssh-tunnel-banner-reader").start();
 
         } catch (Exception e) {
-            getLogger().severe("Failed to establish SSH tunnel: " + e.getMessage());
+            getLogger().severe("Failed to establish SSH tunnel: " + e);
+            for (StackTraceElement el : e.getStackTrace()) {
+                getLogger().severe("    at " + el);
+            }
         }
     }
 }
